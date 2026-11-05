@@ -2,7 +2,7 @@
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Long Beach Coastal Flood & Tide Simulator</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -10,19 +10,6 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        darkbg: '#0f172a',
-                        cardbg: '#1e293b',
-                    }
-                }
-            }
-        }
-    </script>
     <style>
         html, body {
             height: 100%;
@@ -30,24 +17,30 @@
             padding: 0;
             background-color: #0f172a;
         }
-        /* Explicit map height for mobile Safari & desktop */
-        #map { 
-            height: 420px !important; 
-            width: 100% !important; 
+        /* Mobile Map Container Fix */
+        #map-container {
+            width: 100%;
+            height: 450px;
+            min-height: 450px;
+            position: relative;
             background: #1e293b;
         }
+        #map { 
+            width: 100% !important; 
+            height: 100% !important; 
+        }
         @media (min-width: 1024px) {
-            #map { 
+            #map-container { 
                 height: 100% !important; 
                 min-height: 600px;
             }
         }
     </style>
 </head>
-<body class="bg-darkbg text-slate-100 min-h-screen flex flex-col overflow-y-auto font-sans">
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col overflow-y-auto font-sans">
 
     <!-- Top Navigation / Header -->
-    <header class="bg-cardbg border-b border-slate-700 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 z-20 sticky top-0 shadow-lg">
+    <header class="bg-slate-800 border-b border-slate-700 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 z-20 sticky top-0 shadow-lg">
         <div class="flex items-center space-x-3 w-full sm:w-auto justify-between">
             <div class="flex items-center space-x-3">
                 <div class="bg-blue-600 p-2 rounded-lg text-white font-bold text-lg shadow">🌊</div>
@@ -76,7 +69,7 @@
     <div class="flex-1 flex flex-col lg:flex-row relative">
 
         <!-- Sidebar Control Panel -->
-        <aside class="w-full lg:w-96 bg-cardbg border-r border-slate-700 flex flex-col z-10">
+        <aside class="w-full lg:w-96 bg-slate-800 border-r border-slate-700 flex flex-col z-10">
             
             <!-- Water Level Slider Control -->
             <div class="p-4 sm:p-5 border-b border-slate-700 space-y-4">
@@ -134,4 +127,103 @@
                 <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3">
                     <div class="bg-slate-900 p-3 rounded-lg border border-slate-700 flex items-center justify-between">
                         <div>
-                            
+                            <span class="text-xs text-slate-400 block">Flooded Land Area</span>
+                            <span id="stat-acres" class="text-base sm:text-lg font-bold text-slate-100">142 Acres</span>
+                        </div>
+                        <span class="text-xl">📐</span>
+                    </div>
+
+                    <div class="bg-slate-900 p-3 rounded-lg border border-slate-700 flex items-center justify-between">
+                        <div>
+                            <span class="text-xs text-slate-400 block">Impacted Structures</span>
+                            <span id="stat-structures" class="text-base sm:text-lg font-bold text-amber-400">380 Buildings</span>
+                        </div>
+                        <span class="text-xl">🏠</span>
+                    </div>
+
+                    <div class="bg-slate-900 p-3 rounded-lg border border-slate-700 flex items-center justify-between">
+                        <div>
+                            <span class="text-xs text-slate-400 block">Roadway Submerged</span>
+                            <span id="stat-roads" class="text-base sm:text-lg font-bold text-red-400">2.4 Miles</span>
+                        </div>
+                        <span class="text-xl">🚗</span>
+                    </div>
+                </div>
+
+                <!-- Risk Warning Banner -->
+                <div id="risk-banner" class="bg-amber-950/40 border border-amber-600/50 p-3 rounded-lg text-xs text-amber-200 leading-relaxed">
+                    ⚠️ <strong>Advisory:</strong> Water levels above 5.5 ft start overtopping retaining seawalls around Naples Island canals and Peninsula bayfronts.
+                </div>
+            </div>
+        </aside>
+
+        <!-- Map Viewport -->
+        <main class="w-full flex-1 relative">
+            <div id="map-container">
+                <div id="map"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Leaflet & Simulation Logic Script -->
+    <script>
+        // Global Map Variables
+        var map;
+        var hotspotMarkers = [];
+        var floodOverlay = null;
+        var isPlaying = false;
+        var playInterval = null;
+
+        var hotspots = [
+            { name: "Naples Canal System", lat: 33.7472, lng: -118.1345, elevation: 4.8, desc: "Low-lying residential canals. Seawalls top out around 5.0ft NAVD88." },
+            { name: "Belmont Shore (2nd St)", lat: 33.7551, lng: -118.1392, elevation: 6.2, desc: "Commercial corridor; prone to street flooding during extreme king tides." },
+            { name: "The Peninsula Bayfront", lat: 33.7392, lng: -118.1275, elevation: 5.1, desc: "Narrow strip between Alamitos Bay and the Pacific Ocean." },
+            { name: "Alamitos Bay Marina", lat: 33.7480, lng: -118.1200, elevation: 4.2, desc: "Docks and parking lots highly sensitive to tidal surges." },
+            { name: "Long Beach Downtown Harbor", lat: 33.7650, lng: -118.1900, elevation: 6.5, desc: "Commercial port areas with reinforced sea bulkheads." }
+        ];
+
+        // Global Helper Functions exposed to window
+        function updateWaterLevel(val) {
+            document.getElementById('water-val').innerText = parseFloat(val).toFixed(2) + ' ft';
+            updateFloodVisualization(parseFloat(val));
+        }
+
+        function renderHotspots() {
+            if (!map) return;
+            hotspotMarkers.forEach(function(m) { map.removeLayer(m); });
+            hotspotMarkers = [];
+
+            var currentWater = parseFloat(document.getElementById('water-slider').value);
+
+            hotspots.forEach(function(spot) {
+                var isFlooded = currentWater >= spot.elevation;
+                var circle = L.circleMarker([spot.lat, spot.lng], {
+                    radius: 9,
+                    fillColor: isFlooded ? '#ef4444' : '#2563eb',
+                    color: '#ffffff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.85
+                }).addTo(map);
+
+                circle.bindPopup(
+                    '<div class="p-2 text-slate-900">' +
+                        '<h4 class="font-bold text-sm">' + spot.name + '</h4>' +
+                        '<p class="text-xs text-slate-600 mt-1">' + spot.desc + '</p>' +
+                        '<hr class="my-1 border-slate-300">' +
+                        '<div class="text-xs">' +
+                            '<div><strong>Elevation:</strong> ' + spot.elevation + ' ft NAVD88</div>' +
+                            '<div><strong>Status:</strong> <span class="' + (isFlooded ? 'text-red-600 font-bold' : 'text-emerald-600') + '">' + (isFlooded ? '⚠️ INUNDATED' : '✓ SECURE') + '</span></div>' +
+                        '</div>' +
+                    '</div>'
+                );
+
+                hotspotMarkers.push(circle);
+            });
+        }
+
+        function updateFloodVisualization(waterLevel) {
+            if (!map) return;
+            if (floodOverlay) map.removeLayer(floodOverlay);
+
+            
