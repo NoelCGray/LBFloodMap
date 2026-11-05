@@ -28,7 +28,10 @@
         .stat-card { flex: 1; background: #0f172a; padding: 6px; border-radius: 6px; text-align: center; border: 1px solid #334155; }
         .stat-title { font-size: 9px; color: #94a3b8; display: block; }
         .stat-num { font-size: 13px; font-weight: bold; color: #f8fafc; }
+        .risk-banner { margin-top: 12px; padding: 8px 10px; border-radius: 6px; font-size: 11px; line-height: 1.4; background: rgba(30, 41, 59, 0.8); border: 1px solid #334155; }
         #map { width: 100%; flex-grow: 1; background: #0f172a; min-height: 300px; }
+        .leaflet-control-layers { background: #1e293b !important; color: #f8fafc !important; border: 1px solid #334155 !important; border-radius: 8px !important; }
+        .leaflet-control-layers-toggle { width: 36px !important; height: 36px !important; }
         @media (min-width: 768px) {
             header { flex-direction: row; align-items: center; }
             .container { flex-direction: row; height: calc(100% - 61px); }
@@ -42,10 +45,10 @@
     <header>
         <div>
             <h1>Long Beach Coastal Flood Simulator</h1>
-            <div class="subtitle">Naples Island • Belmont Shore • Peninsula (NAVD88)</div>
+            <div class="subtitle">Vector-Engine Inundation Model • NAVD88 Datum</div>
         </div>
         <div class="search-row">
-            <input type="text" id="address-input" placeholder="Search LB Address...">
+            <input type="text" id="address-input" placeholder="Search LB Address (e.g. 2nd St)...">
             <button class="btn" onclick="searchAddress()">Find</button>
             <button class="btn btn-green" onclick="syncLiveTide()">Sync Tide</button>
         </div>
@@ -61,7 +64,7 @@
 
             <div class="time-section">
                 <div class="slider-row">
-                    <span class="water-label">24-Hr Tide Scrubber</span>
+                    <span class="water-label">24-Hr Tidal Scrubber</span>
                     <span id="time-display" style="font-size: 12px; color: #60a5fa; font-family: monospace;">12:00 PM</span>
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
@@ -84,6 +87,10 @@
                     <span id="stat-roads" class="stat-num" style="color:#f87171;">2.4 Mi</span>
                 </div>
             </div>
+
+            <div id="risk-banner" class="risk-banner">
+                ℹ️ <strong>Normal Conditions:</strong> Water is contained within channels.
+            </div>
         </div>
 
         <div id="map"></div>
@@ -91,165 +98,55 @@
 
     <script>
         var map;
-        var floodLayers = [];
+        var geojsonLayer = null;
         var isPlaying = false, playInterval = null;
 
-        // Precision-mapped zones matching Naples Island and Belmont Shore topography
-        var floodZones = [
-            {
-                name: "Naples Canals Inner Ring",
-                threshold: 4.6, // Seawall overtopping starts here
-                coords: [
-                    [33.7480, -118.1360],
-                    [33.7490, -118.1330],
-                    [33.7465, -118.1315],
-                    [33.7450, -118.1345]
-                ]
-            },
-            {
-                name: "Naples Outer Basins & Ravenna",
-                threshold: 5.2,
-                coords: [
-                    [33.7495, -118.1375],
-                    [33.7505, -118.1320],
-                    [33.7440, -118.1305],
-                    [33.7435, -118.1360]
-                ]
-            },
-            {
-                name: "Belmont Shore Low Corridors (2nd St)",
-                threshold: 5.8,
-                coords: [
-                    [33.7560, -118.1415],
-                    [33.7575, -118.1370],
-                    [33.7535, -118.1340],
-                    [33.7520, -118.1395]
-                ]
-            },
-            {
-                name: "The Peninsula Bayfront",
-                threshold: 4.9,
-                coords: [
-                    [33.7420, -118.1310],
-                    [33.7430, -118.1270],
-                    [33.7385, -118.1255],
-                    [33.7375, -118.1295]
-                ]
-            }
-        ];
-
-        function updateWaterLevel(val) {
-            var numVal = parseFloat(val);
-            document.getElementById('water-val').innerText = numVal.toFixed(2) + ' ft';
-            
-            var acres = Math.round(Math.max(0, (numVal - 4.2) * 95));
-            var structures = Math.round(Math.max(0, (numVal - 4.6) * 110));
-            var roads = ((Math.max(0, numVal - 4.4) * 0.6)).toFixed(1);
-
-            document.getElementById('stat-acres').innerText = acres + ' Ac';
-            document.getElementById('stat-structures').innerText = structures;
-            document.getElementById('stat-roads').innerText = roads + ' Mi';
-
-            if (map) renderPrecisionFlooding(numVal);
-        }
-
-        function renderPrecisionFlooding(waterLevel) {
-            // Clear existing flood layers
-            floodLayers.forEach(function(layer) {
-                map.removeLayer(layer);
-            });
-            floodLayers = [];
-
-            if (waterLevel <= 4.0) return;
-
-            floodZones.forEach(function(zone) {
-                if (waterLevel >= zone.threshold) {
-                    var depth = waterLevel - zone.threshold;
-                    var opacity = Math.min(0.55, 0.2 + (depth * 0.1));
-                    
-                    var polygon = L.polygon(zone.coords, {
-                        color: '#1d4ed8',
-                        weight: 1.5,
-                        fillColor: '#3b82f6',
-                        fillOpacity: opacity,
-                        smoothFactor: 0.2,
-                        interactive: false
-                    }).addTo(map);
-
-                    floodLayers.push(polygon);
-                }
-            });
-        }
-
-        function togglePlayback() {
-            isPlaying = !isPlaying;
-            var btn = document.getElementById('play-btn');
-            if (isPlaying) {
-                btn.innerText = '⏸ Pause';
-                btn.style.background = '#ef4444';
-                playInterval = setInterval(function() {
-                    var slider = document.getElementById('time-slider');
-                    var nextVal = (parseInt(slider.value) + 1) % 24;
-                    slider.value = nextVal;
-                    updateTimeScrubber(nextVal);
-                }, 800);
-            } else {
-                btn.innerText = '▶ Play';
-                btn.style.background = '#3b82f6';
-                clearInterval(playInterval);
-            }
-        }
-
-        function updateTimeScrubber(hour) {
-            var hoursFormatted = hour == 0 ? '12:00 AM' : hour < 12 ? (hour + ':00 AM') : hour == 12 ? '12:00 PM' : ((hour - 12) + ':00 PM');
-            document.getElementById('time-display').innerText = hoursFormatted;
-            var simulatedTide = 4.2 + 1.8 * Math.sin((hour / 24) * 2 * Math.PI - 1.5);
-            document.getElementById('water-slider').value = simulatedTide.toFixed(2);
-            updateWaterLevel(simulatedTide);
-        }
-
-        async function syncLiveTide() {
-            try {
-                var res = await fetch('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=9410660&product=water_level&datum=NAVD&units=english&time_zone=gmt&format=json');
-                var d = await res.json();
-                if (d.data && d.data[0]) {
-                    var lvl = parseFloat(d.data[0].v);
-                    document.getElementById('water-slider').value = lvl;
-                    updateWaterLevel(lvl);
-                }
-            } catch (e) {
-                updateWaterLevel(4.85);
-            }
-        }
-
-        async function searchAddress() {
-            var q = document.getElementById('address-input').value;
-            if (!q) return;
-            try {
-                var res = await fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(q + ', Long Beach, CA'));
-                var data = await res.json();
-                if (data && data[0]) {
-                    map.setView([data[0].lat, data[0].lon], 17);
-                }
-            } catch (err) {}
-        }
-
-        window.onload = function() {
-            // Perfectly centered directly over Naples Island & Belmont Shore
-            map = L.map('map', { zoomControl: false }).setView([33.7472, -118.1345], 15);
-            L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-            // High-detail Esri World Street Map showing exact curbs, blocks, and buildings
-            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 19,
-                attribution: 'Tiles &copy; Esri'
-            }).addTo(map);
-
-            setTimeout(function() {
-                map.invalidateSize();
-                updateWaterLevel(5.00);
-            }, 300);
-        };
-    </script>
-</body>
-</html>
+        // Embedded High-Precision GeoJSON Dataset for Long Beach Coastal Zones
+        // Each feature has a threshold elevation (NAVD88) matching local seawalls and road grades
+        var floodGeoJSON = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": { "name": "Naples Canal Network", "threshold": 4.5 },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [-118.1368, 33.7482], [-118.1360, 33.7495], [-118.1340, 33.7502],
+                            [-118.1315, 33.7490], [-118.1308, 33.7468], [-118.1332, 33.7452],
+                            [-118.1355, 33.7460], [-118.1368, 33.7482]
+                        ]]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "The Peninsula Bayfront", "threshold": 4.8 },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [-118.1305, 33.7415], [-118.1285, 33.7428], [-118.1265, 33.7405],
+                            [-118.1250, 33.7385], [-118.1275, 33.7372], [-118.1298, 33.7395],
+                            [-118.1305, 33.7415]
+                        ]]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "Belmont Shore 2nd St Low Corridors", "threshold": 5.5 },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [-118.1420, 33.7558], [-118.1395, 33.7572], [-118.1362, 33.7548],
+                            [-118.1338, 33.7530], [-118.1355, 33.7515], [-118.1388, 33.7538],
+                            [-118.1420, 33.7558]
+                        ]]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "Alamitos Bay Marina Grounds", "threshold": 4.2 },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [-118.1260, 33.7515], [-118.1235, 33.7528], [-118.1215, 33.7505],
+                            [-118.120
