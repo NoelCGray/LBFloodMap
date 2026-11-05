@@ -4,130 +4,134 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Long Beach Coastal Flood & Tide Simulator</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkbg: '#0f172a',
+                        cardbg: '#1e293b',
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        html, body { height: 100%; margin: 0; padding: 0; background-color: #0f172a; }
-        #map { height: 450px !important; width: 100% !important; background: #1e293b; }
-        @media (min-width: 1024px) { #map { height: 100% !important; min-height: 600px; } }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #0f172a;
+        }
+        /* Explicit map height for mobile Safari & desktop */
+        #map { 
+            height: 420px !important; 
+            width: 100% !important; 
+            background: #1e293b;
+        }
+        @media (min-width: 1024px) {
+            #map { 
+                height: 100% !important; 
+                min-height: 600px;
+            }
+        }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
+<body class="bg-darkbg text-slate-100 min-h-screen flex flex-col overflow-y-auto font-sans">
 
-    <header class="bg-slate-800 border-b border-slate-700 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 z-20">
-        <div class="flex items-center space-x-3">
-            <div class="bg-blue-600 p-2 rounded-lg text-white font-bold text-lg">🌊</div>
-            <div>
-                <h1 class="text-base sm:text-xl font-bold text-white">Long Beach Flood Simulator</h1>
-                <p class="text-xs text-slate-400">Naples • Alamitos Bay • Belmont Shore • Peninsula</p>
+    <!-- Top Navigation / Header -->
+    <header class="bg-cardbg border-b border-slate-700 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 z-20 sticky top-0 shadow-lg">
+        <div class="flex items-center space-x-3 w-full sm:w-auto justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2 rounded-lg text-white font-bold text-lg shadow">🌊</div>
+                <div>
+                    <h1 class="text-base sm:text-xl font-bold tracking-tight text-white">Long Beach Flood Simulator</h1>
+                    <p class="text-xs text-slate-400">Naples • Alamitos Bay • Belmont Shore • Peninsula</p>
+                </div>
             </div>
         </div>
         
-        <div class="flex items-center gap-2 w-full sm:w-auto">
-            <input type="text" id="address-input" placeholder="Search LB Address..." class="bg-slate-900 border border-slate-700 rounded px-3 py-1 text-xs text-slate-200 w-full">
-            <button onclick="searchAddress()" class="bg-blue-600 text-xs px-3 py-1 rounded text-white font-medium">Find</button>
-            <button onclick="syncLiveTide()" class="bg-emerald-600 text-xs px-3 py-1 rounded text-white font-medium whitespace-nowrap">Sync Tide</button>
+        <!-- Search & Live Status Bar -->
+        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div class="flex items-center space-x-2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 flex-1 sm:w-64">
+                <span class="text-slate-400 text-xs">📍</span>
+                <input type="text" id="address-input" placeholder="Search LB Address (e.g. 2nd St)..." class="bg-transparent border-none text-xs text-slate-200 focus:outline-none w-full">
+                <button onclick="searchAddress()" class="bg-blue-600 hover:bg-blue-500 text-xs px-2.5 py-1 rounded text-white font-medium transition">Find</button>
+            </div>
+
+            <button onclick="syncLiveTide()" class="bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold px-3 py-2 rounded-lg transition text-white shadow whitespace-nowrap">
+                Sync Live Tide
+            </button>
         </div>
     </header>
 
+    <!-- Main Workspace -->
     <div class="flex-1 flex flex-col lg:flex-row relative">
-        <aside class="w-full lg:w-96 bg-slate-800 border-r border-slate-700 p-4 space-y-4">
-            <div>
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-xs uppercase text-slate-400 font-semibold">Water Level</span>
-                    <span id="water-val" class="text-xl font-bold text-blue-400">5.00 ft</span>
+
+        <!-- Sidebar Control Panel -->
+        <aside class="w-full lg:w-96 bg-cardbg border-r border-slate-700 flex flex-col z-10">
+            
+            <!-- Water Level Slider Control -->
+            <div class="p-4 sm:p-5 border-b border-slate-700 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="font-semibold text-xs text-slate-200 uppercase tracking-wider">Water Level Simulation</h2>
+                    <span id="water-val" class="text-xl font-extrabold text-blue-400">5.00 ft</span>
                 </div>
-                <input type="range" id="water-slider" min="0" max="10" step="0.25" value="5.00" class="w-full h-2 bg-slate-700 rounded appearance-none cursor-pointer accent-blue-500" oninput="updateWaterLevel(this.value)">
+                
+                <input type="range" id="water-slider" min="0" max="10" step="0.25" value="5.00" 
+                    class="w-full h-3 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    oninput="updateWaterLevel(this.value)">
+
+                <div class="flex justify-between text-xs text-slate-400">
+                    <span>0 ft (Low)</span>
+                    <span>5 ft (King Tide)</span>
+                    <span>10 ft (Extreme)</span>
+                </div>
+
+                <!-- Time Scrubber Playback Controls -->
+                <div class="pt-2 border-t border-slate-700/60">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-medium text-slate-300">24-Hour Tidal Scrubber</span>
+                        <span id="time-display" class="text-xs text-blue-400 font-mono">12:00 PM</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="play-btn" onclick="togglePlayback()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded text-xs font-medium transition flex items-center space-x-1">
+                            <span>▶ Play</span>
+                        </button>
+                        <input type="range" id="time-slider" min="0" max="23" step="1" value="12" 
+                            class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-400"
+                            oninput="updateTimeScrubber(this.value)">
+                    </div>
+                </div>
             </div>
 
-            <div class="grid grid-cols-3 gap-2 text-center text-xs">
-                <div class="bg-slate-900 p-2 rounded border border-slate-700">
-                    <span class="text-slate-400 block">Area</span>
-                    <span id="stat-acres" class="font-bold text-white">142 Ac</span>
-                </div>
-                <div class="bg-slate-900 p-2 rounded border border-slate-700">
-                    <span class="text-slate-400 block">Buildings</span>
-                    <span id="stat-structures" class="font-bold text-amber-400">380</span>
-                </div>
-                <div class="bg-slate-900 p-2 rounded border border-slate-700">
-                    <span class="text-slate-400 block">Roads</span>
-                    <span id="stat-roads" class="font-bold text-red-400">2.4 Mi</span>
+            <!-- Model Parameters -->
+            <div class="p-4 sm:p-5 border-b border-slate-700 space-y-3">
+                <h3 class="font-semibold text-xs text-slate-400 uppercase tracking-wider">Model Parameters</h3>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div class="bg-slate-900/50 p-2.5 rounded border border-slate-700">
+                        <span class="text-xs text-slate-400 block">Vertical Datum</span>
+                        <span class="font-semibold text-slate-200">NAVD88</span>
+                    </div>
+                    <div class="bg-slate-900/50 p-2.5 rounded border border-slate-700">
+                        <span class="text-xs text-slate-400 block">Connectivity Mode</span>
+                        <span class="font-semibold text-emerald-400">Hydraulic Linked</span>
+                    </div>
                 </div>
             </div>
-        </aside>
 
-        <main class="w-full flex-1 relative">
-            <div id="map"></div>
-        </main>
-    </div>
-
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const map = L.map('map', { zoomControl: false }).setView([33.7485, -118.1280], 14);
-            L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '&copy; OpenStreetMap'
-            }).addTo(map);
-
-            setTimeout(() => { map.invalidateSize(); }, 400);
-
-            const hotspots = [
-                { name: "Naples Canals", lat: 33.7472, lng: -118.1345, elevation: 4.8 },
-                { name: "Belmont Shore", lat: 33.7551, lng: -118.1392, elevation: 6.2 },
-                { name: "The Peninsula", lat: 33.7392, lng: -118.1275, elevation: 5.1 },
-                { name: "Alamitos Bay Marina", lat: 33.7480, lng: -118.1200, elevation: 4.2 }
-            ];
-
-            let markers = [];
-            function render() {
-                markers.forEach(m => map.removeLayer(m));
-                markers = [];
-                const water = parseFloat(document.getElementById('water-slider').value);
-                hotspots.forEach(spot => {
-                    const flooded = water >= spot.elevation;
-                    const c = L.circleMarker([spot.lat, spot.lng], {
-                        radius: 8,
-                        fillColor: flooded ? '#ef4444' : '#2563eb',
-                        color: '#fff',
-                        weight: 2,
-                        fillOpacity: 0.9
-                    }).addTo(map);
-                    c.bindPopup(`<b>${spot.name}</b><br>Elevation: ${spot.elevation} ft`);
-                    markers.push(c);
-                });
-            }
-
-            window.updateWaterLevel = function(val) {
-                document.getElementById('water-val').innerText = parseFloat(val).toFixed(2) + ' ft';
-                render();
-            };
-
-            window.syncLiveTide = async function() {
-                try {
-                    const res = await fetch('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=9410660&product=water_level&datum=NAVD&units=english&time_zone=gmt&format=json');
-                    const d = await res.json();
-                    if (d.data && d.data[0]) {
-                        document.getElementById('water-slider').value = d.data[0].v;
-                        window.updateWaterLevel(d.data[0].v);
-                    }
-                } catch (e) {}
-            };
-
-            window.searchAddress = async function() {
-                const q = document.getElementById('address-input').value;
-                if (!q) return;
-                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Long Beach, CA')}`);
-                const data = await res.json();
-                if (data && data[0]) {
-                    map.setView([data[0].lat, data[0].lon], 16);
-                }
-            };
-
-            render();
-        });
-    </script>
-</body>
-</html>
+            <!-- Impact Statistics -->
+            <div class="p-4 sm:p-5 space-y-4">
+                <h3 class="font-semibold text-xs text-slate-400 uppercase tracking-wider">Impact Assessment</h3>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3">
+                    <div class="bg-slate-900 p-3 rounded-lg border border-slate-700 flex items-center justify-between">
+                        <div>
+                            
