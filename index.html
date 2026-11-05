@@ -24,19 +24,22 @@
         }
     </script>
     <style>
-        /* Mobile-safe viewport sizing */
         html, body {
             height: 100%;
             margin: 0;
             padding: 0;
+            background-color: #0f172a;
         }
+        /* Explicit map height for mobile Safari */
         #map { 
-            height: 450px; 
-            width: 100%; 
+            height: 420px !important; 
+            width: 100% !important; 
+            background: #1e293b;
         }
         @media (min-width: 1024px) {
             #map { 
-                height: 100%; 
+                height: 100% !important; 
+                min-height: 600px;
             }
         }
     </style>
@@ -69,7 +72,7 @@
         </div>
     </header>
 
-    <!-- Main Content Workspace (Scrollable on mobile) -->
+    <!-- Main Workspace -->
     <div class="flex-1 flex flex-col lg:flex-row relative">
 
         <!-- Sidebar Control Panel -->
@@ -112,7 +115,6 @@
             <!-- Model Parameters -->
             <div class="p-4 sm:p-5 border-b border-slate-700 space-y-3">
                 <h3 class="font-semibold text-xs text-slate-400 uppercase tracking-wider">Model Parameters</h3>
-                
                 <div class="grid grid-cols-2 gap-3 text-sm">
                     <div class="bg-slate-900/50 p-2.5 rounded border border-slate-700">
                         <span class="text-xs text-slate-400 block">Vertical Datum</span>
@@ -125,7 +127,7 @@
                 </div>
             </div>
 
-            <!-- Dynamic Risk & Impact Statistics -->
+            <!-- Impact Statistics -->
             <div class="p-4 sm:p-5 space-y-4">
                 <h3 class="font-semibold text-xs text-slate-400 uppercase tracking-wider">Impact Assessment</h3>
                 
@@ -163,154 +165,113 @@
         </aside>
 
         <!-- Map Viewport -->
-        <main class="flex-1 relative min-h-[450px]">
+        <main class="w-full flex-1 relative bg-slate-900">
             <div id="map"></div>
         </main>
     </div>
 
     <!-- Leaflet & Simulation Logic Script -->
     <script>
-        const map = L.map('map', { zoomControl: false }).setView([33.7485, -118.1280], 14);
-        L.control.zoom({ position: 'bottomright' }).addTo(map);
+        // Wait until DOM is fully rendered before mounting map
+        document.addEventListener("DOMContentLoaded", function () {
+            const map = L.map('map', { zoomControl: false }).setView([33.7485, -118.1280], 14);
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap &copy; CARTO',
-            subdomains: 'abcd',
-            maxZoom: 19
-        }).addTo(map);
+            // Primary Tile Layer: OpenStreetMap Standard (Guaranteed high availability on mobile)
+            const osmTiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(map);
 
-        const hotspots = [
-            { name: "Naples Canal System", lat: 33.7472, lng: -118.1345, elevation: 4.8, desc: "Low-lying residential canals. Seawalls top out around 5.0ft NAVD88." },
-            { name: "Belmont Shore (2nd St)", lat: 33.7551, lng: -118.1392, elevation: 6.2, desc: "Commercial corridor; prone to street flooding during extreme king tides." },
-            { name: "The Peninsula Bayfront", lat: 33.7392, lng: -118.1275, elevation: 5.1, desc: "Narrow strip between Alamitos Bay and the Pacific Ocean." },
-            { name: "Alamitos Bay Marina", lat: 33.7480, lng: -118.1200, elevation: 4.2, desc: "Docks and parking lots highly sensitive to tidal surges." },
-            { name: "Long Beach Downtown Harbor", lat: 33.7650, lng: -118.1900, elevation: 6.5, desc: "Commercial port areas with reinforced sea bulkheads." }
-        ];
+            // Force map calculation recalculation after render
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300);
 
-        let hotspotMarkers = [];
+            const hotspots = [
+                { name: "Naples Canal System", lat: 33.7472, lng: -118.1345, elevation: 4.8, desc: "Low-lying residential canals." },
+                { name: "Belmont Shore (2nd St)", lat: 33.7551, lng: -118.1392, elevation: 6.2, desc: "Commercial corridor." },
+                { name: "The Peninsula Bayfront", lat: 33.7392, lng: -118.1275, elevation: 5.1, desc: "Narrow bayfront strip." },
+                { name: "Alamitos Bay Marina", lat: 33.7480, lng: -118.1200, elevation: 4.2, desc: "Docks and parking grounds." },
+                { name: "Long Beach Downtown Harbor", lat: 33.7650, lng: -118.1900, elevation: 6.5, desc: "Commercial port areas." }
+            ];
 
-        function renderHotspots() {
-            hotspotMarkers.forEach(m => map.removeLayer(m));
-            hotspotMarkers = [];
+            let hotspotMarkers = [];
 
-            const currentWater = parseFloat(document.getElementById('water-slider').value);
+            function renderHotspots() {
+                hotspotMarkers.forEach(m => map.removeLayer(m));
+                hotspotMarkers = [];
 
-            hotspots.forEach(spot => {
-                const isFlooded = currentWater >= spot.elevation;
-                const circle = L.circleMarker([spot.lat, spot.lng], {
-                    radius: 8,
-                    fillColor: isFlooded ? '#ef4444' : '#3b82f6',
-                    color: '#ffffff',
-                    weight: 2,
-                    opacity: 1,
-                    fillOpacity: 0.85
-                }).addTo(map);
+                const currentWater = parseFloat(document.getElementById('water-slider').value);
 
-                circle.bindPopup(`
-                    <div class="p-2 text-slate-900">
-                        <h4 class="font-bold text-sm">${spot.name}</h4>
-                        <p class="text-xs text-slate-600 mt-1">${spot.desc}</p>
-                        <hr class="my-1 border-slate-300">
-                        <div class="text-xs">
-                            <div><strong>Elevation:</strong> ${spot.elevation} ft NAVD88</div>
-                            <div><strong>Status:</strong> <span class="${isFlooded ? 'text-red-600 font-bold' : 'text-emerald-600'}">${isFlooded ? '⚠️ INUNDATED' : '✓ SECURE'}</span></div>
+                hotspots.forEach(spot => {
+                    const isFlooded = currentWater >= spot.elevation;
+                    const circle = L.circleMarker([spot.lat, spot.lng], {
+                        radius: 9,
+                        fillColor: isFlooded ? '#ef4444' : '#2563eb',
+                        color: '#ffffff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.85
+                    }).addTo(map);
+
+                    circle.bindPopup(`
+                        <div class="p-2 text-slate-900">
+                            <h4 class="font-bold text-sm">${spot.name}</h4>
+                            <p class="text-xs text-slate-600 mt-1">${spot.desc}</p>
+                            <hr class="my-1 border-slate-300">
+                            <div class="text-xs">
+                                <div><strong>Elevation:</strong> ${spot.elevation} ft NAVD88</div>
+                                <div><strong>Status:</strong> <span class="${isFlooded ? 'text-red-600 font-bold' : 'text-emerald-600'}">${isFlooded ? '⚠️ INUNDATED' : '✓ SECURE'}</span></div>
+                            </div>
                         </div>
-                    </div>
-                `);
+                    `);
 
-                hotspotMarkers.push(circle);
-            });
-        }
-
-        let floodOverlay = null;
-
-        function updateFloodVisualization(waterLevel) {
-            if (floodOverlay) map.removeLayer(floodOverlay);
-
-            if (waterLevel > 4.0) {
-                const intensity = Math.min(1.0, (waterLevel - 4.0) / 5.0);
-                const naplesCoords = [
-                    [33.7495, -118.1370],
-                    [33.7490, -118.1310],
-                    [33.7445, -118.1320],
-                    [33.7450, -118.1380]
-                ];
-
-                floodOverlay = L.polygon(naplesCoords, {
-                    color: '#3b82f6',
-                    fillColor: '#60a5fa',
-                    fillOpacity: 0.35 + (intensity * 0.25),
-                    weight: 1.5
-                }).addTo(map);
+                    hotspotMarkers.push(circle);
+                });
             }
 
-            renderHotspots();
-            updateStats(waterLevel);
-        }
+            let floodOverlay = null;
 
-        function updateStats(waterLevel) {
-            let acres = Math.round(Math.max(0, (waterLevel - 4.0) * 120));
-            let structures = Math.round(Math.max(0, (waterLevel - 4.5) * 140));
-            let roads = ((Math.max(0, waterLevel - 4.2) * 0.8)).toFixed(1);
+            function updateFloodVisualization(waterLevel) {
+                if (floodOverlay) map.removeLayer(floodOverlay);
 
-            document.getElementById('stat-acres').innerText = `${acres} Acres`;
-            document.getElementById('stat-structures').innerText = `${structures} Buildings`;
-            document.getElementById('stat-roads').innerText = `${roads} Miles`;
+                if (waterLevel > 4.0) {
+                    const intensity = Math.min(1.0, (waterLevel - 4.0) / 5.0);
+                    const naplesCoords = [
+                        [33.7495, -118.1370],
+                        [33.7490, -118.1310],
+                        [33.7445, -118.1320],
+                        [33.7450, -118.1380]
+                    ];
 
-            const warning = document.getElementById('risk-banner');
-            if (waterLevel >= 5.5) {
-                warning.className = "bg-red-950/50 border border-red-600 p-3 rounded-lg text-xs text-red-200 leading-relaxed";
-                warning.innerHTML = "🚨 <strong>CRITICAL ALERT:</strong> Widespread overtopping occurring across Naples canals, Peninsula bayfront, and low roadways.";
-            } else if (waterLevel >= 4.8) {
-                warning.className = "bg-amber-950/40 border border-amber-600/50 p-3 rounded-lg text-xs text-amber-200 leading-relaxed";
-                warning.innerHTML = "⚠️ <strong>Advisory:</strong> Water levels are nearing seawall crests in low coastal neighborhoods.";
-            } else {
-                warning.className = "bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-xs text-slate-300 leading-relaxed";
-                warning.innerHTML = "ℹ️ <strong>Normal Conditions:</strong> Water is safely contained within maritime channels and canals.";
+                    floodOverlay = L.polygon(naplesCoords, {
+                        color: '#1d4ed8',
+                        fillColor: '#3b82f6',
+                        fillOpacity: 0.35 + (intensity * 0.25),
+                        weight: 2
+                    }).addTo(map);
+                }
+
+                renderHotspots();
+                updateStats(waterLevel);
             }
-        }
 
-        function updateWaterLevel(val) {
-            document.getElementById('water-val').innerText = parseFloat(val).toFixed(2) + ' ft';
-            updateFloodVisualization(parseFloat(val));
-        }
+            function updateStats(waterLevel) {
+                let acres = Math.round(Math.max(0, (waterLevel - 4.0) * 120));
+                let structures = Math.round(Math.max(0, (waterLevel - 4.5) * 140));
+                let roads = ((Math.max(0, waterLevel - 4.2) * 0.8)).toFixed(1);
 
-        let isPlaying = false;
-        let playInterval = null;
+                document.getElementById('stat-acres').innerText = `${acres} Acres`;
+                document.getElementById('stat-structures').innerText = `${structures} Buildings`;
+                document.getElementById('stat-roads').innerText = `${roads} Miles`;
 
-        function togglePlayback() {
-            isPlaying = !isPlaying;
-            const btn = document.getElementById('play-btn');
-            if (isPlaying) {
-                btn.innerHTML = '<span>⏸ Pause</span>';
-                btn.classList.replace('bg-slate-700', 'bg-blue-600');
-                playInterval = setInterval(() => {
-                    let slider = document.getElementById('time-slider');
-                    let nextVal = (parseInt(slider.value) + 1) % 24;
-                    slider.value = nextVal;
-                    updateTimeScrubber(nextVal);
-                }, 800);
-            } else {
-                btn.innerHTML = '<span>▶ Play</span>';
-                btn.classList.replace('bg-blue-600', 'bg-slate-700');
-                clearInterval(playInterval);
-            }
-        }
-
-        function updateTimeScrubber(hour) {
-            const hoursFormatted = hour == 0 ? '12:00 AM' : hour < 12 ? `${hour}:00 AM` : hour == 12 ? '12:00 PM' : `${hour - 12}:00 PM`;
-            document.getElementById('time-display').innerText = hoursFormatted;
-            let simulatedTide = 4.2 + 1.8 * Math.sin((hour / 24) * 2 * Math.PI - 1.5);
-            document.getElementById('water-slider').value = simulatedTide.toFixed(2);
-            updateWaterLevel(simulatedTide.toFixed(2));
-        }
-
-        async function syncLiveTide() {
-            try {
-                const response = await fetch('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=9410660&product=water_level&datum=NAVD&units=english&time_zone=gmt&format=json');
-                const data = await response.json();
-                if (data && data.data && data.data.length > 0) {
-                    const liveLevel = parseFloat(data.data[0].v);
-                    document.getElementById('water-slider').value = liveLevel.toFixed(2);
-                    updateWaterLevel(liveLevel);
-                
+                const warning = document.getElementById('risk-banner');
+                if (waterLevel >= 5.5) {
+                    warning.className = "bg-red-950/50 border border-red-600 p-3 rounded-lg text-xs text-red-200 leading-relaxed";
+                    warning.innerHTML = "🚨 <strong>CRITICAL ALERT:</strong> Widespread overtopping occurring across Naples canals, Peninsula bayfront, and low roadways.";
+                } else if (waterLevel >= 4.8) {
+                    warning.className = "bg-amber-950/40 border border-amber-600/50 p-3 rounded-lg text-xs text-amber-200 leading-relaxed";
+                    warning.innerHTML = "⚠️ <strong>Advisory:</strong> Water levels are nearing seawall crests in low coastal neighborhoods.";
+                } else {
+                    warning.className = "bg-slate-900/50 border border-slate-700 p-3 rounded-
