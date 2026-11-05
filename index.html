@@ -9,7 +9,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         * { box-sizing: border-box; }
-        html, body { height: 100%; margin: 0; padding: 0; background-color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #f8fafc; }
+        html, body { height: 100%; margin: 0; padding: 0; background-color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #f8fafc; overflow-y: auto; }
         header { background: #1e293b; padding: 12px 16px; border-bottom: 1px solid #334155; display: flex; flex-direction: column; gap: 10px; }
         h1 { margin: 0; font-size: 16px; color: #ffffff; }
         .subtitle { font-size: 11px; color: #94a3b8; }
@@ -17,8 +17,8 @@
         .search-row input { flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #f8fafc; font-size: 12px; }
         .btn { background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; }
         .btn-green { background: #10b981; }
-        .container { display: flex; flex-direction: column; height: calc(100% - 105px); }
-        .controls { background: #1e293b; padding: 16px; border-bottom: 1px solid #334155; overflow-y: auto; max-height: 40vh; }
+        
+        .controls { background: #1e293b; padding: 16px; border-bottom: 1px solid #334155; }
         .slider-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
         .water-label { font-size: 11px; font-weight: bold; text-transform: uppercase; color: #cbd5e1; }
         .water-val { font-size: 18px; font-weight: bold; color: #60a5fa; }
@@ -29,14 +29,19 @@
         .stat-title { font-size: 9px; color: #94a3b8; display: block; }
         .stat-num { font-size: 13px; font-weight: bold; color: #f8fafc; }
         .risk-banner { margin-top: 12px; padding: 8px 10px; border-radius: 6px; font-size: 11px; line-height: 1.4; background: rgba(30, 41, 59, 0.8); border: 1px solid #334155; }
-        #map { width: 100%; flex-grow: 1; background: #0f172a; min-height: 300px; }
+        
+        /* Guaranteed minimum height so map never disappears on mobile */
+        #map { width: 100%; height: 450px; background: #0f172a; }
+        
         .leaflet-control-layers { background: #1e293b !important; color: #f8fafc !important; border: 1px solid #334155 !important; border-radius: 8px !important; }
         .leaflet-control-layers-toggle { width: 36px !important; height: 36px !important; }
+
         @media (min-width: 768px) {
             header { flex-direction: row; align-items: center; }
-            .container { flex-direction: row; height: calc(100% - 61px); }
-            .controls { width: 360px; border-right: 1px solid #334155; border-bottom: none; max-height: none; }
-            #map { height: 100%; }
+            body { display: flex; flex-direction: column; overflow: hidden; height: 100vh; }
+            .main-layout { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 61px); }
+            .controls { width: 360px; height: 100%; border-right: 1px solid #334155; border-bottom: none; overflow-y: auto; }
+            #map { height: 100vh; flex: 1; }
         }
     </style>
 </head>
@@ -45,7 +50,7 @@
     <header>
         <div>
             <h1>Long Beach Coastal Flood Simulator</h1>
-            <div class="subtitle">Vector-Engine Inundation Model • NAVD88 Datum</div>
+            <div class="subtitle">Naples Island • Belmont Shore • Peninsula (NAVD88)</div>
         </div>
         <div class="search-row">
             <input type="text" id="address-input" placeholder="Search LB Address (e.g. 2nd St)...">
@@ -54,7 +59,7 @@
         </div>
     </header>
 
-    <div class="container">
+    <div class="main-layout" style="display: flex; flex-direction: column;">
         <div class="controls">
             <div class="slider-row">
                 <span class="water-label">Water Elevation</span>
@@ -76,77 +81,4 @@
             <div class="stats">
                 <div class="stat-card">
                     <span class="stat-title">Flooded Land</span>
-                    <span id="stat-acres" class="stat-num">142 Ac</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-title">Buildings</span>
-                    <span id="stat-structures" class="stat-num" style="color:#fbbf24;">380</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-title">Roadways</span>
-                    <span id="stat-roads" class="stat-num" style="color:#f87171;">2.4 Mi</span>
-                </div>
-            </div>
-
-            <div id="risk-banner" class="risk-banner">
-                ℹ️ <strong>Normal Conditions:</strong> Water is contained within channels.
-            </div>
-        </div>
-
-        <div id="map"></div>
-    </div>
-
-    <script>
-        var map;
-        var geojsonLayer = null;
-        var isPlaying = false, playInterval = null;
-
-        // Embedded High-Precision GeoJSON Dataset for Long Beach Coastal Zones
-        // Each feature has a threshold elevation (NAVD88) matching local seawalls and road grades
-        var floodGeoJSON = {
-            "type": "FeatureCollection",
-            "features": [
-                {
-                    "type": "Feature",
-                    "properties": { "name": "Naples Canal Network", "threshold": 4.5 },
-                    "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [[
-                            [-118.1368, 33.7482], [-118.1360, 33.7495], [-118.1340, 33.7502],
-                            [-118.1315, 33.7490], [-118.1308, 33.7468], [-118.1332, 33.7452],
-                            [-118.1355, 33.7460], [-118.1368, 33.7482]
-                        ]]
-                    }
-                },
-                {
-                    "type": "Feature",
-                    "properties": { "name": "The Peninsula Bayfront", "threshold": 4.8 },
-                    "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [[
-                            [-118.1305, 33.7415], [-118.1285, 33.7428], [-118.1265, 33.7405],
-                            [-118.1250, 33.7385], [-118.1275, 33.7372], [-118.1298, 33.7395],
-                            [-118.1305, 33.7415]
-                        ]]
-                    }
-                },
-                {
-                    "type": "Feature",
-                    "properties": { "name": "Belmont Shore 2nd St Low Corridors", "threshold": 5.5 },
-                    "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [[
-                            [-118.1420, 33.7558], [-118.1395, 33.7572], [-118.1362, 33.7548],
-                            [-118.1338, 33.7530], [-118.1355, 33.7515], [-118.1388, 33.7538],
-                            [-118.1420, 33.7558]
-                        ]]
-                    }
-                },
-                {
-                    "type": "Feature",
-                    "properties": { "name": "Alamitos Bay Marina Grounds", "threshold": 4.2 },
-                    "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [[
-                            [-118.1260, 33.7515], [-118.1235, 33.7528], [-118.1215, 33.7505],
-                            [-118.120
+                    <span id="stat-acres"
