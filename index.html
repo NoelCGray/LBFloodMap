@@ -24,63 +24,72 @@
         }
     </script>
     <style>
-        #map { height: 100%; width: 100%; }
-        .slider-thumb::-webkit-slider-thumb {
-            background: #3b82f6;
+        /* Mobile-safe viewport sizing */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #map { 
+            height: 450px; 
+            width: 100%; 
+        }
+        @media (min-width: 1024px) {
+            #map { 
+                height: 100%; 
+            }
         }
     </style>
 </head>
-<body class="bg-darkbg text-slate-100 h-screen flex flex-col overflow-hidden font-sans">
+<body class="bg-darkbg text-slate-100 min-h-screen flex flex-col overflow-y-auto font-sans">
 
     <!-- Top Navigation / Header -->
-    <header class="bg-cardbg border-b border-slate-700 px-6 py-3 flex items-center justify-between shadow-md z-20">
-        <div class="flex items-center space-x-3">
-            <div class="bg-blue-600 p-2 rounded-lg text-white font-bold text-xl">🌊</div>
-            <div>
-                <h1 class="text-xl font-bold tracking-tight text-white">Long Beach Flood & Tide Simulator</h1>
-                <p class="text-xs text-slate-400">Naples • Alamitos Bay • Belmont Shore • Peninsula • Port of LB</p>
+    <header class="bg-cardbg border-b border-slate-700 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 z-20 sticky top-0">
+        <div class="flex items-center space-x-3 w-full sm:w-auto justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2 rounded-lg text-white font-bold text-lg">🌊</div>
+                <div>
+                    <h1 class="text-base sm:text-xl font-bold tracking-tight text-white">Long Beach Flood Simulator</h1>
+                    <p class="text-xs text-slate-400">Naples • Alamitos Bay • Belmont Shore • Peninsula</p>
+                </div>
             </div>
         </div>
         
-        <!-- Address Search Box -->
-        <div class="hidden md:flex items-center space-x-2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 w-80">
-            <span class="text-slate-400">📍</span>
-            <input type="text" id="address-input" placeholder="Search LB Address (e.g. 2nd St)..." class="bg-transparent border-none text-sm text-slate-200 focus:outline-none w-full">
-            <button onclick="searchAddress()" class="bg-blue-600 hover:bg-blue-500 text-xs px-2.5 py-1 rounded text-white font-medium transition">Find</button>
-        </div>
-
-        <div class="flex items-center space-x-4">
-            <div id="noaa-status" class="text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 text-slate-300 flex items-center space-x-2">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span id="noaa-text">NOAA Station 9410660: Loading...</span>
+        <!-- Search & Live Status Bar -->
+        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div class="flex items-center space-x-2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 flex-1 sm:w-64">
+                <span class="text-slate-400 text-xs">📍</span>
+                <input type="text" id="address-input" placeholder="Search LB Address..." class="bg-transparent border-none text-xs text-slate-200 focus:outline-none w-full">
+                <button onclick="searchAddress()" class="bg-blue-600 hover:bg-blue-500 text-xs px-2.5 py-1 rounded text-white font-medium transition">Find</button>
             </div>
-            <button onclick="syncLiveTide()" class="bg-blue-600 hover:bg-blue-700 text-xs font-semibold px-3 py-2 rounded-lg transition text-white shadow">
+
+            <button onclick="syncLiveTide()" class="bg-blue-600 hover:bg-blue-700 text-xs font-semibold px-3 py-2 rounded-lg transition text-white shadow whitespace-nowrap">
                 Sync Live Tide
             </button>
         </div>
     </header>
 
-    <!-- Main Workspace -->
+    <!-- Main Content Workspace (Scrollable on mobile) -->
     <div class="flex-1 flex flex-col lg:flex-row relative">
 
         <!-- Sidebar Control Panel -->
-        <aside class="w-full lg:w-96 bg-cardbg border-r border-slate-700 flex flex-col z-10 overflow-y-auto">
+        <aside class="w-full lg:w-96 bg-cardbg border-r border-slate-700 flex flex-col z-10">
             
             <!-- Water Level Slider Control -->
-            <div class="p-5 border-b border-slate-700 space-y-4">
+            <div class="p-4 sm:p-5 border-b border-slate-700 space-y-4">
                 <div class="flex justify-between items-center">
-                    <h2 class="font-semibold text-sm text-slate-200 uppercase tracking-wider">Water Level Simulation</h2>
+                    <h2 class="font-semibold text-xs text-slate-200 uppercase tracking-wider">Water Level Simulation</h2>
                     <span id="water-val" class="text-xl font-extrabold text-blue-400">5.00 ft</span>
                 </div>
                 
                 <input type="range" id="water-slider" min="0" max="10" step="0.25" value="5.00" 
-                    class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    class="w-full h-3 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
                     oninput="updateWaterLevel(this.value)">
 
                 <div class="flex justify-between text-xs text-slate-400">
-                    <span>0 ft (Normal Low)</span>
+                    <span>0 ft (Low)</span>
                     <span>5 ft (King Tide)</span>
-                    <span>10 ft (Extreme Storm)</span>
+                    <span>10 ft (Extreme)</span>
                 </div>
 
                 <!-- Time Scrubber Playback Controls -->
@@ -94,14 +103,14 @@
                             <span>▶ Play</span>
                         </button>
                         <input type="range" id="time-slider" min="0" max="23" step="1" value="12" 
-                            class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-400"
+                            class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-400"
                             oninput="updateTimeScrubber(this.value)">
                     </div>
                 </div>
             </div>
 
-            <!-- Simulation Settings -->
-            <div class="p-5 border-b border-slate-700 space-y-3">
+            <!-- Model Parameters -->
+            <div class="p-4 sm:p-5 border-b border-slate-700 space-y-3">
                 <h3 class="font-semibold text-xs text-slate-400 uppercase tracking-wider">Model Parameters</h3>
                 
                 <div class="grid grid-cols-2 gap-3 text-sm">
@@ -114,40 +123,35 @@
                         <span class="font-semibold text-emerald-400">Hydraulic Linked</span>
                     </div>
                 </div>
-
-                <label class="flex items-center space-x-2 text-sm pt-1 cursor-pointer">
-                    <input type="checkbox" id="waves-toggle" class="rounded bg-slate-800 border-slate-700 text-blue-600 focus:ring-0">
-                    <span class="text-slate-300">Include Storm Surge & Wave Runup (+1.2ft)</span>
-                </label>
             </div>
 
             <!-- Dynamic Risk & Impact Statistics -->
-            <div class="p-5 flex-1 space-y-4">
+            <div class="p-4 sm:p-5 space-y-4">
                 <h3 class="font-semibold text-xs text-slate-400 uppercase tracking-wider">Impact Assessment</h3>
                 
-                <div class="space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3">
                     <div class="bg-slate-900 p-3 rounded-lg border border-slate-700 flex items-center justify-between">
                         <div>
                             <span class="text-xs text-slate-400 block">Flooded Land Area</span>
-                            <span id="stat-acres" class="text-lg font-bold text-slate-100">142 Acres</span>
+                            <span id="stat-acres" class="text-base sm:text-lg font-bold text-slate-100">142 Acres</span>
                         </div>
-                        <span class="text-2xl">📐</span>
+                        <span class="text-xl">📐</span>
                     </div>
 
                     <div class="bg-slate-900 p-3 rounded-lg border border-slate-700 flex items-center justify-between">
                         <div>
                             <span class="text-xs text-slate-400 block">Impacted Structures</span>
-                            <span id="stat-structures" class="text-lg font-bold text-amber-400">380 Buildings</span>
+                            <span id="stat-structures" class="text-base sm:text-lg font-bold text-amber-400">380 Buildings</span>
                         </div>
-                        <span class="text-2xl">🏠</span>
+                        <span class="text-xl">🏠</span>
                     </div>
 
                     <div class="bg-slate-900 p-3 rounded-lg border border-slate-700 flex items-center justify-between">
                         <div>
                             <span class="text-xs text-slate-400 block">Roadway Submerged</span>
-                            <span id="stat-roads" class="text-lg font-bold text-red-400">2.4 Miles</span>
+                            <span id="stat-roads" class="text-base sm:text-lg font-bold text-red-400">2.4 Miles</span>
                         </div>
-                        <span class="text-2xl">🚗</span>
+                        <span class="text-xl">🚗</span>
                     </div>
                 </div>
 
@@ -156,35 +160,25 @@
                     ⚠️ <strong>Advisory:</strong> Water levels above 5.5 ft start overtopping retaining seawalls around Naples Island canals and Peninsula bayfronts.
                 </div>
             </div>
-
-            <div class="p-4 bg-slate-950 text-center text-xs text-slate-500 border-t border-slate-800">
-                Long Beach Flood Engine v2.0 • USGS LiDAR & NOAA API
-            </div>
         </aside>
 
         <!-- Map Viewport -->
-        <main class="flex-1 relative">
+        <main class="flex-1 relative min-h-[450px]">
             <div id="map"></div>
         </main>
     </div>
 
     <!-- Leaflet & Simulation Logic Script -->
     <script>
-        // Initialize Map centered on Long Beach Coastal Zones
-        const map = L.map('map', {
-            zoomControl: false
-        }).setView([33.7485, -118.1280], 14);
-
+        const map = L.map('map', { zoomControl: false }).setView([33.7485, -118.1280], 14);
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        // Dark Mode Basemap Tiles (CartoDB Dark Matter)
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
             subdomains: 'abcd',
             maxZoom: 19
         }).addTo(map);
 
-        // Key Hotspot Markers with Elevation Profiles
         const hotspots = [
             { name: "Naples Canal System", lat: 33.7472, lng: -118.1345, elevation: 4.8, desc: "Low-lying residential canals. Seawalls top out around 5.0ft NAVD88." },
             { name: "Belmont Shore (2nd St)", lat: 33.7551, lng: -118.1392, elevation: 6.2, desc: "Commercial corridor; prone to street flooding during extreme king tides." },
@@ -203,11 +197,9 @@
 
             hotspots.forEach(spot => {
                 const isFlooded = currentWater >= spot.elevation;
-                const markerColor = isFlooded ? '#ef4444' : '#3b82f6';
-                
                 const circle = L.circleMarker([spot.lat, spot.lng], {
-                    radius: 9,
-                    fillColor: markerColor,
+                    radius: 8,
+                    fillColor: isFlooded ? '#ef4444' : '#3b82f6',
                     color: '#ffffff',
                     weight: 2,
                     opacity: 1,
@@ -218,9 +210,9 @@
                     <div class="p-2 text-slate-900">
                         <h4 class="font-bold text-sm">${spot.name}</h4>
                         <p class="text-xs text-slate-600 mt-1">${spot.desc}</p>
-                        <hr class="my-1.5 border-slate-300">
-                        <div class="text-xs space-y-1">
-                            <div><strong>Ground Elevation:</strong> ${spot.elevation} ft NAVD88</div>
+                        <hr class="my-1 border-slate-300">
+                        <div class="text-xs">
+                            <div><strong>Elevation:</strong> ${spot.elevation} ft NAVD88</div>
                             <div><strong>Status:</strong> <span class="${isFlooded ? 'text-red-600 font-bold' : 'text-emerald-600'}">${isFlooded ? '⚠️ INUNDATED' : '✓ SECURE'}</span></div>
                         </div>
                     </div>
@@ -230,19 +222,13 @@
             });
         }
 
-        // Simulated Flood Polygon Layers (Dynamic visual overlay for Naples/Peninsula)
         let floodOverlay = null;
 
         function updateFloodVisualization(waterLevel) {
-            if (floodOverlay) {
-                map.removeLayer(floodOverlay);
-            }
+            if (floodOverlay) map.removeLayer(floodOverlay);
 
-            // Create synthetic polygons representing low-lying flood spread around Naples and Alamitos Bay based on slider
             if (waterLevel > 4.0) {
                 const intensity = Math.min(1.0, (waterLevel - 4.0) / 5.0);
-                
-                // Naples Island Polygon
                 const naplesCoords = [
                     [33.7495, -118.1370],
                     [33.7490, -118.1310],
@@ -289,7 +275,6 @@
             updateFloodVisualization(parseFloat(val));
         }
 
-        // Time Scrubber Logic
         let isPlaying = false;
         let playInterval = null;
 
@@ -315,68 +300,17 @@
         function updateTimeScrubber(hour) {
             const hoursFormatted = hour == 0 ? '12:00 AM' : hour < 12 ? `${hour}:00 AM` : hour == 12 ? '12:00 PM' : `${hour - 12}:00 PM`;
             document.getElementById('time-display').innerText = hoursFormatted;
-            
-            // Simulate realistic tide curve over 24 hours (sine wave peak around hour 6 and 18)
             let simulatedTide = 4.2 + 1.8 * Math.sin((hour / 24) * 2 * Math.PI - 1.5);
             document.getElementById('water-slider').value = simulatedTide.toFixed(2);
             updateWaterLevel(simulatedTide.toFixed(2));
         }
 
-        // Live NOAA Station Data Fetcher
         async function syncLiveTide() {
-            const statusText = document.getElementById('noaa-text');
-            statusText.innerText = 'Fetching NOAA Station 9410660...';
             try {
-                // Fetch recent verified water level from NOAA CO-OPS API for Los Angeles Harbor
                 const response = await fetch('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=9410660&product=water_level&datum=NAVD&units=english&time_zone=gmt&format=json');
                 const data = await response.json();
                 if (data && data.data && data.data.length > 0) {
                     const liveLevel = parseFloat(data.data[0].v);
                     document.getElementById('water-slider').value = liveLevel.toFixed(2);
                     updateWaterLevel(liveLevel);
-                    statusText.innerText = `NOAA Station 9410660 (LA Harbor): ${liveLevel.toFixed(2)} ft NAVD88`;
-                } else {
-                    throw new Error('No data');
-                }
-            } catch (e) {
-                // Fallback realistic LA Harbor tide reading if network blocks
-                const fallbackTide = 4.85;
-                document.getElementById('water-slider').value = fallbackTide;
-                updateWaterLevel(fallbackTide);
-                statusText.innerText = `NOAA Station 9410660: ${fallbackTide} ft (Synced)`;
-            }
-        }
-
-        // Address Geocoding Search via OpenStreetMap Nominatim
-        async function searchAddress() {
-            const query = document.getElementById('address-input').value;
-            if (!query) return;
-            
-            try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', Long Beach, CA')}`);
-                const results = await res.json();
-                if (results && results.length > 0) {
-                    const lat = parseFloat(results[0].lat);
-                    const lon = parseFloat(results[0].lon);
-                    map.setView([lat, lon], 17);
-                    
-                    L.popup()
-                        .setLatLng([lat, lon])
-                        .setContent(`<div class="p-2 text-slate-900"><strong class="text-sm">${results[0].display_name}</strong><br><span class="text-xs text-blue-600">Location located in Long Beach flood model.</span></div>`)
-                        .openOn(map);
-                } else {
-                    alert('Address not found in Long Beach.');
-                }
-            } catch (err) {
-                alert('Geocoding service unavailable.');
-            }
-        }
-
-        // Initialize App on Load
-        window.onload = () => {
-            updateWaterLevel(5.00);
-            syncLiveTide();
-        };
-    </script>
-</body>
-</html>
+                
