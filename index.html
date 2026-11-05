@@ -9,23 +9,30 @@
     <style>
         * { box-sizing: border-box; }
         html, body { height: 100%; margin: 0; padding: 0; background-color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #f8fafc; }
-        header { background: #1e293b; padding: 12px 16px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
+        header { background: #1e293b; padding: 12px 16px; border-bottom: 1px solid #334155; display: flex; flex-direction: column; gap: 10px; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; }
         h1 { margin: 0; font-size: 16px; color: #ffffff; }
         .subtitle { font-size: 11px; color: #94a3b8; }
-        .container { display: flex; flex-direction: column; height: calc(100% - 57px); }
-        .controls { background: #1e293b; padding: 16px; border-bottom: 1px solid #334155; }
-        .slider-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .water-label { font-size: 12px; font-weight: bold; text-transform: uppercase; color: #cbd5e1; }
+        .search-row { display: flex; gap: 6px; }
+        .search-row input { flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #f8fafc; font-size: 12px; }
+        .btn { background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; }
+        .btn-green { background: #10b981; }
+        .container { display: flex; flex-direction: column; height: calc(100% - 105px); }
+        .controls { background: #1e293b; padding: 16px; border-bottom: 1px solid #334155; overflow-y: auto; max-height: 40vh; }
+        .slider-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .water-label { font-size: 11px; font-weight: bold; text-transform: uppercase; color: #cbd5e1; }
         .water-val { font-size: 18px; font-weight: bold; color: #60a5fa; }
-        input[type=range] { width: 100%; height: 6px; border-radius: 3px; accent-color: #3b82f6; }
-        .stats { display: flex; gap: 8px; margin-top: 12px; }
-        .stat-card { flex: 1; background: #0f172a; padding: 8px; border-radius: 6px; text-align: center; border: 1px solid #334155; }
-        .stat-title { font-size: 10px; color: #94a3b8; display: block; }
-        .stat-num { font-size: 14px; font-weight: bold; color: #f8fafc; }
-        #map { width: 100%; height: 400px; flex-grow: 1; background: #0f172a; }
+        input[type=range] { width: 100%; height: 6px; border-radius: 3px; accent-color: #3b82f6; margin-bottom: 12px; }
+        .time-section { border-top: 1px solid #334155; padding-top: 10px; margin-top: 10px; }
+        .stats { display: flex; gap: 6px; margin-top: 12px; }
+        .stat-card { flex: 1; background: #0f172a; padding: 6px; border-radius: 6px; text-align: center; border: 1px solid #334155; }
+        .stat-title { font-size: 9px; color: #94a3b8; display: block; }
+        .stat-num { font-size: 13px; font-weight: bold; color: #f8fafc; }
+        #map { width: 100%; flex-grow: 1; background: #0f172a; min-height: 300px; }
         @media (min-width: 768px) {
-            .container { flex-direction: row; }
-            .controls { width: 340px; border-r: 1px solid #334155; border-b: none; }
+            header { flex-direction: row; align-items: center; }
+            .container { flex-direction: row; height: calc(100% - 61px); }
+            .controls { width: 360px; border-right: 1px solid #334155; border-bottom: none; max-height: none; }
             #map { height: 100%; }
         }
     </style>
@@ -37,16 +44,31 @@
             <h1>Long Beach Flood Simulator</h1>
             <div class="subtitle">Naples • Belmont Shore • Peninsula</div>
         </div>
+        <div class="search-row">
+            <input type="text" id="address-input" placeholder="Search LB Address (e.g. 2nd St)...">
+            <button class="btn" onclick="searchAddress()">Find</button>
+            <button class="btn btn-green" onclick="syncLiveTide()">Sync Tide</button>
+        </div>
     </header>
 
     <div class="container">
         <div class="controls">
             <div class="slider-row">
-                <span class="water-label">Water Level</span>
+                <span class="water-label">Water Level (NAVD88)</span>
                 <span id="water-val" class="water-val">5.00 ft</span>
             </div>
-            
             <input type="range" id="water-slider" min="0" max="10" step="0.25" value="5.00" oninput="updateWaterLevel(this.value)">
+
+            <div class="time-section">
+                <div class="slider-row">
+                    <span class="water-label">24-Hr Tide Scrubber</span>
+                    <span id="time-display" style="font-size: 12px; color: #60a5fa; font-family: monospace;">12:00 PM</span>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn" id="play-btn" onclick="togglePlayback()" style="padding: 4px 8px; font-size: 11px;">▶ Play</button>
+                    <input type="range" id="time-slider" min="0" max="23" step="1" value="12" style="margin-bottom: 0;" oninput="updateTimeScrubber(this.value)">
+                </div>
+            </div>
 
             <div class="stats">
                 <div class="stat-card">
@@ -69,26 +91,29 @@
 
     <script>
         var map, hotspotMarkers = [], floodOverlay = null;
+        var isPlaying = false, playInterval = null;
 
+        // Corrected coordinates pinned accurately to Long Beach land features
         var hotspots = [
-            { name: "Naples Canal System", lat: 33.7472, lng: -118.1345, elevation: 4.8 },
-            { name: "Belmont Shore (2nd St)", lat: 33.7551, lng: -118.1392, elevation: 6.2 },
-            { name: "The Peninsula Bayfront", lat: 33.7392, lng: -118.1275, elevation: 5.1 },
-            { name: "Alamitos Bay Marina", lat: 33.7480, lng: -118.1200, elevation: 4.2 }
+            { name: "Naples Canal System", lat: 33.7482, lng: -118.1340, elevation: 4.8, desc: "Residential canals & low seawalls." },
+            { name: "Belmont Shore (2nd St)", lat: 33.7554, lng: -118.1385, elevation: 6.2, desc: "Commercial corridor & low intersections." },
+            { name: "The Peninsula Bayfront", lat: 33.7410, lng: -118.1285, elevation: 5.1, desc: "Bayfront strip prone to overtopping." },
+            { name: "Alamitos Bay Marina", lat: 33.7505, lng: -118.1250, elevation: 4.2, desc: "Docks and parking lots." }
         ];
 
         function updateWaterLevel(val) {
-            document.getElementById('water-val').innerText = parseFloat(val).toFixed(2) + ' ft';
+            var numVal = parseFloat(val);
+            document.getElementById('water-val').innerText = numVal.toFixed(2) + ' ft';
             
-            var acres = Math.round(Math.max(0, (val - 4.0) * 120));
-            var structures = Math.round(Math.max(0, (val - 4.5) * 140));
-            var roads = ((Math.max(0, val - 4.2) * 0.8)).toFixed(1);
+            var acres = Math.round(Math.max(0, (numVal - 4.0) * 120));
+            var structures = Math.round(Math.max(0, (numVal - 4.5) * 140));
+            var roads = ((Math.max(0, numVal - 4.2) * 0.8)).toFixed(1);
 
             document.getElementById('stat-acres').innerText = acres + ' Ac';
             document.getElementById('stat-structures').innerText = structures;
             document.getElementById('stat-roads').innerText = roads + ' Mi';
 
-            if (map) render(parseFloat(val));
+            if (map) render(numVal);
         }
 
         function render(waterLevel) {
@@ -105,30 +130,86 @@
                     fillOpacity: 0.9
                 }).addTo(map);
 
-                circle.bindPopup('<b>' + spot.name + '</b><br>Elevation: ' + spot.elevation + ' ft NAVD88');
+                circle.bindPopup('<div style="color:#0f172a;"><b>' + spot.name + '</b><br><span style="font-size:11px;">' + spot.desc + '</span><br><b>Elevation:</b> ' + spot.elevation + ' ft<br><b>Status:</b> ' + (isFlooded ? '<span style="color:red;font-weight:bold;">INUNDATED</span>' : '<span style="color:green;">SECURE</span>') + '</div>');
                 hotspotMarkers.push(circle);
             });
 
             if (floodOverlay) map.removeLayer(floodOverlay);
             if (waterLevel > 4.0) {
-                var naplesCoords = [
-                    [33.7495, -118.1370],
-                    [33.7490, -118.1310],
-                    [33.7445, -118.1320],
-                    [33.7450, -118.1380]
+                // Properly aligned polygon over Naples Islands land channels
+                var naplesPolygonCoords = [
+                    [33.7502, -118.1365],
+                    [33.7492, -118.1310],
+                    [33.7455, -118.1315],
+                    [33.7460, -118.1375]
                 ];
-                floodOverlay = L.polygon(naplesCoords, {
-                    color: '#2563eb',
-                    fillColor: '#60a5fa',
-                    fillOpacity: 0.5,
+                floodOverlay = L.polygon(naplesPolygonCoords, {
+                    color: '#1d4ed8',
+                    fillColor: '#3b82f6',
+                    fillOpacity: 0.45,
                     weight: 2
                 }).addTo(map);
             }
         }
 
+        function togglePlayback() {
+            isPlaying = !isPlaying;
+            var btn = document.getElementById('play-btn');
+            if (isPlaying) {
+                btn.innerText = '⏸ Pause';
+                btn.style.background = '#ef4444';
+                playInterval = setInterval(function() {
+                    var slider = document.getElementById('time-slider');
+                    var nextVal = (parseInt(slider.value) + 1) % 24;
+                    slider.value = nextVal;
+                    updateTimeScrubber(nextVal);
+                }, 800);
+            } else {
+                btn.innerText = '▶ Play';
+                btn.style.background = '#3b82f6';
+                clearInterval(playInterval);
+            }
+        }
+
+        function updateTimeScrubber(hour) {
+            var hoursFormatted = hour == 0 ? '12:00 AM' : hour < 12 ? (hour + ':00 AM') : hour == 12 ? '12:00 PM' : ((hour - 12) + ':00 PM');
+            document.getElementById('time-display').innerText = hoursFormatted;
+            var simulatedTide = 4.2 + 1.8 * Math.sin((hour / 24) * 2 * Math.PI - 1.5);
+            document.getElementById('water-slider').value = simulatedTide.toFixed(2);
+            updateWaterLevel(simulatedTide);
+        }
+
+        async function syncLiveTide() {
+            try {
+                var res = await fetch('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=9410660&product=water_level&datum=NAVD&units=english&time_zone=gmt&format=json');
+                var d = await res.json();
+                if (d.data && d.data[0]) {
+                    var lvl = parseFloat(d.data[0].v);
+                    document.getElementById('water-slider').value = lvl;
+                    updateWaterLevel(lvl);
+                }
+            } catch (e) {
+                updateWaterLevel(4.85);
+            }
+        }
+
+        async function searchAddress() {
+            var q = document.getElementById('address-input').value;
+            if (!q) return;
+            try {
+                var res = await fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(q + ', Long Beach, CA'));
+                var data = await res.json();
+                if (data && data[0]) {
+                    map.setView([data[0].lat, data[0].lon], 16);
+                }
+            } catch (err) {}
+        }
+
         window.onload = function() {
-            map = L.map('map', { zoomControl: false }).setView([33.7485, -118.1280], 14);
-            
+            // Centered accurately on Naples / Belmont Shore
+            map = L.map('map', { zoomControl: false }).setView([33.7485, -118.1320], 14);
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '&copy; OpenStreetMap'
